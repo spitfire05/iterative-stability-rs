@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Hello wasm-pack!</title>
+  </head>
+  <body>
+    <noscript>This page contains webassembly and javascript content, please enable javascript in your browser.</noscript>
+
+
+    <canvas id="myCanvas" width="1000" height="1000" style="border:1px solid #d3d3d3;">Your browser does not support the HTML canvas tag.</canvas>
+    
+    <script src="./bootstrap.js"></script>
+
+    <div style="display: inline-block;">
+      <div style="display: block;">
+        <label>Cx</label>
+        <input type="range" value="0" step="0.01" min="-2" max="2" id="cx" />
+        <label id="cx-out">0</label>
+      </div>
+      <div style="display: block;">
+        <label>Cy</label>
+        <input type="range" value="0" step="0.01" min="-2" max="2" id="cy" />
+        <label id="cy-out">0</label>
+      </div>
+      <div style="display: block;">
+        Palette length:
+        <input type="number" value="250" id="palette-length" />
+      </div>
+      <div style="display: block;">
+        <label>Palette hue</label>
+        <input type="range" value="0" max="360" id="palette-hue" />
+        <label id="palette-hue-info">0</label>
+      </div>
+      <div style="display: block;">
+        <button id="generate">Generate</button>
+      </div>
+    </div>
+    
+  </body>
+</html>
