@@ -1,0 +1,29 @@
+name: "CD: WASM Juila app"
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install wasm intergration
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+    - name: Build WASM
+      working-directory: wasm-julia
+      run: wasm-pack build
+    - name: Build NPM
+      working-directory: wasm-juila/www
+      run: npm install
+    - name: Deploy to GH Pages
+      uses: JamesIves/github-pages-deploy-action@4.0.0
+      with:
+        branch: gh-pages # The branch the action should deploy to.
+        folder: wasm-julia/www # The folder the action should deploy.
