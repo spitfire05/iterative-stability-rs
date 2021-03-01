@@ -26,4 +26,3 @@ jobs:
         heroku_app_name: "wasm-julia" #Must be unique in Heroku
         heroku_email: ${{secrets.HEROKU_EMAIL}}
         appdir: wasm-julia
-        buildpack: "https://github.com/solana-labs/heroku-buildpack-rust-wasm-pack.git"
