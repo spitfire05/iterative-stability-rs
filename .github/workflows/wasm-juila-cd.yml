@@ -27,7 +27,7 @@ jobs:
       run: rm www/.gitignore && rm pkg/.gitignore
       working-directory: wasm-julia
     - name: Copy pkg to node_modules
-      run: rm www/node_modules/wasm-julia && mv pkg/ www/node-modules/wasm-julia
+      run: rm www/node_modules/wasm-julia && mv pkg/ www/node_modules/wasm-julia
       working-directory: wasm-julia
     - name: Deploy to GH Pages
       uses: JamesIves/github-pages-deploy-action@4.0.0
