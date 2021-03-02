@@ -14,12 +14,20 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - uses: actions/setup-node@v2
     - name: Install wasm intergration
       run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-    - name: Deploy to Heroku
-      uses: akhileshns/heroku-deploy@v3.12.12 # This is the action
+    - name: Build WASM
+      working-directory: wasm-julia
+      run: wasm-pack build
+    - name: Build NPM
+      working-directory: wasm-julia/www
+      run: npm install
+    - name: rm gitignores
+      run: rm www/.gitignore && rm pkg/.gitignore
+      working-directory: wasm-julia
+    - name: Deploy to GH Pages
+      uses: JamesIves/github-pages-deploy-action@4.0.0
       with:
-        heroku_api_key: ${{secrets.HEROKU_API_KEY}}
-        heroku_app_name: "wasm-julia" #Must be unique in Heroku
-        heroku_email: ${{secrets.HEROKU_EMAIL}}
-        appdir: wasm-julia/www
+        branch: gh-pages # The branch the action should deploy to.
+        folder: wasm-julia/www # The folder the action should deploy.
