@@ -1,14 +1,16 @@
-use num_complex::Complex64;
+use num_complex::Complex;
+use num_traits::{Float, NumCast};
 
-pub fn is_stable<F, G>(
+pub fn is_stable<F, G, U>(
     function: F,
-    initial: Complex64,
+    initial: U,
     stability_check: G,
     max_iterations: u64,
 ) -> (u64, bool)
 where
-    F: Fn(Complex64) -> Complex64,
-    G: Fn(&Complex64) -> bool,
+    F: Fn(U) -> U,
+    G: Fn(&U) -> bool,
+    U: PartialEq + Copy,
 {
     let mut n = initial;
     let mut i: u64 = 0;
@@ -21,7 +23,6 @@ where
             return (i, true);
         }
         n = function(n);
-        //println!("{:?} prec: {:?}", n, n.prec());
         if last.is_some() && last.unwrap() == n {
             return (i, true);
         }
@@ -32,34 +33,39 @@ where
 
 #[cfg(not(feature = "parallel"))]
 pub mod mandelbrot {
-    use crate::calc_space_params;
-    use crate::from_screen_pixel_mandelbrot;
+    use crate::{from_screen_pixel_mandelbrot, SpaceParams};
+    use num_traits::Float;
 
-    pub fn calc_screen_space(
-        x_bounds: (f64, f64),
-        y_bounds: (f64, f64),
+    pub fn calc_screen_space<F>(
+        x_bounds: (F, F),
+        y_bounds: (F, F),
         resolution: (i32, i32),
-    ) -> impl Iterator<Item = (u64, bool)> {
-        let sp = calc_space_params(x_bounds, y_bounds, resolution);
+    ) -> impl Iterator<Item = (u64, bool)>
+    where
+        F: Float,
+    {
+        let sp = SpaceParams::<F>::calc_space_params(x_bounds, y_bounds, resolution);
 
         (0i32..(resolution.0 * resolution.1))
             .map(move |index| from_screen_pixel_mandelbrot(index, resolution, sp))
     }
 }
 
-///
 #[cfg(feature = "parallel")]
 pub mod mandelbrot {
-    use crate::calc_space_params;
-    use crate::from_screen_pixel_mandelbrot;
+    use crate::{from_screen_pixel_mandelbrot, SpaceParams};
+    use num_traits::Float;
     use rayon::prelude::*;
 
-    pub fn calc_screen_space(
-        x_bounds: (f64, f64),
-        y_bounds: (f64, f64),
+    pub fn calc_screen_space<F>(
+        x_bounds: (F, F),
+        y_bounds: (F, F),
         resolution: (i32, i32),
-    ) -> impl ParallelIterator<Item = (u64, bool)> {
-        let sp = calc_space_params(x_bounds, y_bounds, resolution);
+    ) -> impl ParallelIterator<Item = (u64, bool)>
+    where
+        F: Float + Send + Sync,
+    {
+        let sp = SpaceParams::<F>::calc_space_params(x_bounds, y_bounds, resolution);
 
         (0i32..(resolution.0 * resolution.1))
             .into_par_iter()
@@ -69,16 +75,20 @@ pub mod mandelbrot {
 
 #[cfg(feature = "parallel")]
 pub mod julia {
-    use crate::{calc_space_params, from_screen_pixel_julia};
+    use crate::{from_screen_pixel_julia, SpaceParams};
+    use num_traits::Float;
     use rayon::prelude::*;
 
-    pub fn calc_screen_space(
-        x_bounds: (f64, f64),
-        y_bounds: (f64, f64),
+    pub fn calc_screen_space<F>(
+        x_bounds: (F, F),
+        y_bounds: (F, F),
         resolution: (i32, i32),
-        c: (f64, f64),
-    ) -> impl ParallelIterator<Item = (u64, bool)> {
-        let sp = calc_space_params(x_bounds, y_bounds, resolution);
+        c: (F, F),
+    ) -> impl ParallelIterator<Item = (u64, bool)>
+    where
+        F: Float + Send + Sync,
+    {
+        let sp = SpaceParams::<F>::calc_space_params(x_bounds, y_bounds, resolution);
 
         (0i32..(resolution.0 * resolution.1))
             .into_par_iter()
@@ -88,15 +98,19 @@ pub mod julia {
 
 #[cfg(not(feature = "parallel"))]
 pub mod julia {
-    use crate::{calc_space_params, from_screen_pixel_julia};
+    use crate::{from_screen_pixel_julia, SpaceParams};
+    use num_traits::Float;
 
-    pub fn calc_screen_space(
-        x_bounds: (f64, f64),
-        y_bounds: (f64, f64),
+    pub fn calc_screen_space<F>(
+        x_bounds: (F, F),
+        y_bounds: (F, F),
         resolution: (i32, i32),
-        c: (f64, f64),
-    ) -> impl Iterator<Item = (u64, bool)> {
-        let sp = calc_space_params(x_bounds, y_bounds, resolution);
+        c: (F, F),
+    ) -> impl Iterator<Item = (u64, bool)>
+    where
+        F: Float,
+    {
+        let sp = SpaceParams::<F>::calc_space_params(x_bounds, y_bounds, resolution);
 
         (0i32..(resolution.0 * resolution.1))
             .map(move |index| from_screen_pixel_julia(index, resolution, sp, c))
@@ -104,78 +118,97 @@ pub mod julia {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct SpaceParams {
-    scale: (f64, f64),
-    offset: (f64, f64),
-    delta_x: f64,
-    delta_y: f64,
+struct SpaceParams<F>
+where
+    F: Float,
+{
+    scale: (F, F),
+    offset: (F, F),
+    delta_x: F,
+    delta_y: F,
 }
 
-fn calc_space_params(
-    x_bounds: (f64, f64),
-    y_bounds: (f64, f64),
-    resolution: (i32, i32),
-) -> SpaceParams {
-    let scale = (x_bounds.1 - x_bounds.0, y_bounds.1 - y_bounds.0);
+impl<F> SpaceParams<F>
+where
+    F: Float,
+{
+    fn calc_space_params(
+        x_bounds: (F, F),
+        y_bounds: (F, F),
+        resolution: (i32, i32),
+    ) -> SpaceParams<F> {
+        let scale = (x_bounds.1 - x_bounds.0, y_bounds.1 - y_bounds.0);
 
-    let offset = (
-        (x_bounds.0 + x_bounds.1) / 2.0,
-        (y_bounds.0 + y_bounds.1) / 2.0,
-    );
+        let offset = (
+            (x_bounds.0 + x_bounds.1) / F::from(2).unwrap(),
+            (y_bounds.0 + y_bounds.1) / F::from(2).unwrap(),
+        );
 
-    let delta_x = scale.0 / resolution.0 as f64;
-    let delta_y = scale.1 / resolution.1 as f64;
+        let delta_x = scale.0 / F::from(resolution.0).unwrap();
+        let delta_y = scale.1 / F::from(resolution.1).unwrap();
 
-    SpaceParams {
-        scale,
-        offset,
-        delta_x,
-        delta_y,
+        SpaceParams {
+            scale,
+            offset,
+            delta_x,
+            delta_y,
+        }
     }
 }
 
-fn from_screen_pixel_mandelbrot(
+fn from_screen_pixel_mandelbrot<F>(
     index: i32,
     resolution: (i32, i32),
-    sp: SpaceParams,
-) -> (u64, bool) {
+    sp: SpaceParams<F>,
+) -> (u64, bool)
+where
+    F: Float,
+{
     let (x, y) = from_screen_point_to_cartesian(index, resolution, sp);
 
     is_stable(
-        |c| c.powu(2) + Complex64::new(x, y),
-        Complex64::new(0.0, 0.0),
-        |f| f.re < f64::INFINITY && f.im < f64::INFINITY,
+        |c: Complex<F>| {
+            c.powu(2) + Complex::<F>::new(NumCast::from(x).unwrap(), NumCast::from(y).unwrap())
+        },
+        Complex::<F>::new(F::zero(), F::zero()),
+        |f| f.re < F::infinity() && f.im < F::infinity(),
         1000,
     )
 }
 
-fn from_screen_pixel_julia(
+fn from_screen_pixel_julia<F>(
     index: i32,
     resolution: (i32, i32),
-    sp: SpaceParams,
-    c_: (f64, f64),
-) -> (u64, bool) {
+    sp: SpaceParams<F>,
+    c_: (F, F),
+) -> (u64, bool)
+where
+    F: Float,
+{
     let (x, y) = from_screen_point_to_cartesian(index, resolution, sp);
 
     is_stable(
-        |c| c.powu(2) + Complex64::new(c_.0, c_.1),
-        Complex64::new(x, y),
-        |f| f.re < f64::INFINITY && f.im < f64::INFINITY,
+        |c: Complex<F>| c.powu(2) + Complex::<F>::new(c_.0, c_.1),
+        Complex::<F>::new(NumCast::from(x).unwrap(), NumCast::from(y).unwrap()),
+        |f| f.re < F::infinity() && f.im < F::infinity(),
         1000,
     )
 }
 
-fn from_screen_point_to_cartesian(
+fn from_screen_point_to_cartesian<F>(
     index: i32,
     resolution: (i32, i32),
-    sp: SpaceParams,
-) -> (f64, f64) {
+    sp: SpaceParams<F>,
+) -> (F, F)
+where
+    F: Float,
+{
     let screen_x = index % resolution.0;
     let screen_y = index / resolution.0;
 
     // convert to cartesian
-    let x = screen_x as f64 - (resolution.0 as f64 / 2.0);
-    let y = -screen_y as f64 + (resolution.1 as f64 / 2.0);
+    let x = F::from(screen_x).unwrap() - (F::from(resolution.0).unwrap() / F::from(2).unwrap());
+    let y = F::from(-screen_y).unwrap() + (F::from(resolution.1).unwrap() / F::from(2).unwrap());
 
     // convert to destination space
     let x = (x * sp.delta_x) + sp.offset.0;
