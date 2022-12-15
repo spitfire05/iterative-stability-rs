@@ -1,3 +1,4 @@
+use glam::{IVec2, Vec2};
 use num_complex::Complex;
 use num_traits::{Float, NumCast};
 
@@ -54,43 +55,45 @@ pub mod mandelbrot {
 #[cfg(feature = "parallel")]
 pub mod mandelbrot {
     use crate::{from_screen_pixel_mandelbrot, SpaceParams};
+    use glam::{IVec2, Vec2};
     use num_traits::Float;
     use rayon::prelude::*;
 
     pub fn calc_screen_space<F>(
-        x_bounds: (F, F),
-        y_bounds: (F, F),
-        resolution: (i32, i32),
+        lower: Vec2,
+        upper: Vec2,
+        resolution: IVec2,
     ) -> impl ParallelIterator<Item = (u64, bool)>
     where
         F: Float + Send + Sync,
     {
-        let sp = SpaceParams::<F>::calc_space_params(x_bounds, y_bounds, resolution);
+        let sp = SpaceParams::new(lower, upper, resolution);
 
-        (0i32..(resolution.0 * resolution.1))
+        (0i32..(resolution.x * resolution.y))
             .into_par_iter()
-            .map(move |index| from_screen_pixel_mandelbrot(index, resolution, sp))
+            .map(move |index| from_screen_pixel_mandelbrot::<F>(index, resolution, sp))
     }
 }
 
 #[cfg(feature = "parallel")]
 pub mod julia {
     use crate::{from_screen_pixel_julia, SpaceParams};
+    use glam::{IVec2, Vec2};
     use num_traits::Float;
     use rayon::prelude::*;
 
     pub fn calc_screen_space<F>(
-        x_bounds: (F, F),
-        y_bounds: (F, F),
-        resolution: (i32, i32),
+        x_bounds: Vec2,
+        y_bounds: Vec2,
+        resolution: IVec2,
         c: (F, F),
     ) -> impl ParallelIterator<Item = (u64, bool)>
     where
         F: Float + Send + Sync,
     {
-        let sp = SpaceParams::<F>::calc_space_params(x_bounds, y_bounds, resolution);
+        let sp = SpaceParams::new(x_bounds, y_bounds, resolution);
 
-        (0i32..(resolution.0 * resolution.1))
+        (0i32..(resolution.x * resolution.y))
             .into_par_iter()
             .map(move |index| from_screen_pixel_julia(index, resolution, sp, c))
     }
@@ -118,57 +121,36 @@ pub mod julia {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct SpaceParams<F>
-where
-    F: Float,
-{
-    scale: (F, F),
-    offset: (F, F),
-    delta_x: F,
-    delta_y: F,
+struct SpaceParams {
+    scale: Vec2,
+    offset: Vec2,
+    delta: Vec2,
 }
 
-impl<F> SpaceParams<F>
-where
-    F: Float,
-{
-    fn calc_space_params(
-        x_bounds: (F, F),
-        y_bounds: (F, F),
-        resolution: (i32, i32),
-    ) -> SpaceParams<F> {
-        let scale = (x_bounds.1 - x_bounds.0, y_bounds.1 - y_bounds.0);
+impl SpaceParams {
+    fn new(lower: Vec2, upper: Vec2, resolution: IVec2) -> SpaceParams {
+        let scale = Vec2::new((upper.x - lower.x).abs(), (upper.y - lower.y).abs());
+        let offset = (lower + upper) / 2.0;
 
-        let offset = (
-            (x_bounds.0 + x_bounds.1) / F::from(2).unwrap(),
-            (y_bounds.0 + y_bounds.1) / F::from(2).unwrap(),
-        );
-
-        let delta_x = scale.0 / F::from(resolution.0).unwrap();
-        let delta_y = scale.1 / F::from(resolution.1).unwrap();
+        let delta = scale / resolution.as_vec2();
 
         SpaceParams {
             scale,
             offset,
-            delta_x,
-            delta_y,
+            delta,
         }
     }
 }
 
-fn from_screen_pixel_mandelbrot<F>(
-    index: i32,
-    resolution: (i32, i32),
-    sp: SpaceParams<F>,
-) -> (u64, bool)
+fn from_screen_pixel_mandelbrot<F>(index: i32, resolution: IVec2, sp: SpaceParams) -> (u64, bool)
 where
     F: Float,
 {
-    let (x, y) = from_screen_point_to_cartesian(index, resolution, sp);
+    let cart = from_screen_point_to_cartesian(index, resolution, sp);
 
     is_stable(
         |c: Complex<F>| {
-            c.powu(2) + Complex::<F>::new(NumCast::from(x).unwrap(), NumCast::from(y).unwrap())
+            c.powu(2) + Complex::<F>::new(F::from(cart.x).unwrap(), F::from(cart.y).unwrap())
         },
         Complex::<F>::new(F::zero(), F::zero()),
         |f| f.re < F::infinity() && f.im < F::infinity(),
@@ -178,43 +160,40 @@ where
 
 fn from_screen_pixel_julia<F>(
     index: i32,
-    resolution: (i32, i32),
-    sp: SpaceParams<F>,
+    resolution: IVec2,
+    sp: SpaceParams,
     c_: (F, F),
 ) -> (u64, bool)
 where
     F: Float,
 {
-    let (x, y) = from_screen_point_to_cartesian(index, resolution, sp);
+    let cart = from_screen_point_to_cartesian(index, resolution, sp);
 
     is_stable(
         |c: Complex<F>| c.powu(2) + Complex::<F>::new(c_.0, c_.1),
-        Complex::<F>::new(NumCast::from(x).unwrap(), NumCast::from(y).unwrap()),
+        Complex::<F>::new(
+            NumCast::from(cart.x).unwrap(),
+            NumCast::from(cart.y).unwrap(),
+        ),
         |f| f.re < F::infinity() && f.im < F::infinity(),
         1000,
     )
 }
 
-fn from_screen_point_to_cartesian<F>(
-    index: i32,
-    resolution: (i32, i32),
-    sp: SpaceParams<F>,
-) -> (F, F)
-where
-    F: Float,
-{
-    let screen_x = index % resolution.0;
-    let screen_y = index / resolution.0;
+fn from_screen_point_to_cartesian(index: i32, resolution: IVec2, sp: SpaceParams) -> Vec2 {
+    let screen_x = index % resolution.x;
+    let screen_y = index / resolution.x;
 
     // convert to cartesian
-    let x = F::from(screen_x).unwrap() - (F::from(resolution.0).unwrap() / F::from(2).unwrap());
-    let y = F::from(-screen_y).unwrap() + (F::from(resolution.1).unwrap() / F::from(2).unwrap());
+    let cart = IVec2::new(
+        screen_x - (resolution.x) / 2,
+        -screen_y + (resolution.y) / 2,
+    );
 
     // convert to destination space
-    let x = (x * sp.delta_x) + sp.offset.0;
-    let y = (y * sp.delta_y) + sp.offset.1;
+    let cart = (cart.as_vec2() * sp.delta) + sp.offset;
 
-    (x, y)
+    cart
 }
 
 #[cfg(test)]

@@ -1,11 +1,13 @@
+use glam::{IVec2, Vec2};
 use iterative_stability::mandelbrot;
 use minifb::{Key, Window, WindowOptions};
 use palette::{Hsv, Hue, Srgb};
 use rayon::prelude::*;
+use std::time::Instant;
 
 const WIDTH: usize = 1200;
 const HEIGHT: usize = 1200;
-const ZOOM_FACTOR: f64 = 0.25;
+const ZOOM_FACTOR: f32 = 0.25;
 
 fn main() {
     let mut window = Window::new("Mandelbrot", WIDTH, HEIGHT, WindowOptions::default())
@@ -17,21 +19,25 @@ fn main() {
     window.limit_update_rate(Some(std::time::Duration::from_micros(33333)));
 
     let mut buffer_needs_update = true;
-    let mut x_bounds = (-2.5, 1.5);
-    let mut y_bounds = (-2.0, 2.0);
-    let mut scale = (x_bounds.1 - x_bounds.0, y_bounds.1 - y_bounds.0);
-    let mut delta_x = scale.0 / WIDTH as f64;
-    let mut delta_y = scale.1 / HEIGHT as f64;
-    let mut offset = (
-        (x_bounds.0 + x_bounds.1) / 2.0,
-        (y_bounds.0 + y_bounds.1) / 2.0,
-    );
+    let mut bounds_lower = Vec2::new(-2.5, -2.0);
+    let mut bounds_upper = Vec2::new(1.5, 2.0);
+    let mut scale = bounds_upper - bounds_lower;
+    let resolution = IVec2::new(WIDTH as i32, HEIGHT as i32);
+    let mut delta = scale / resolution.as_vec2();
+    let mut offset = bounds_lower + bounds_upper / 2.0;
+    println!("drawing {:?} {:?}", bounds_lower, bounds_upper);
     while window.is_open() && !window.is_key_down(Key::Escape) {
         if buffer_needs_update {
+            let start = Instant::now();
             let buffer: Vec<u32> =
-                mandelbrot::calc_screen_space(x_bounds, y_bounds, (WIDTH as i32, HEIGHT as i32))
+                mandelbrot::calc_screen_space::<f32>(bounds_lower, bounds_upper, resolution)
                     .map(|(iter, stable)| apply_palette(iter, stable))
                     .collect();
+
+            println!(
+                "calculations took {}",
+                humantime::format_duration(start.elapsed())
+            );
 
             // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
             window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
@@ -39,31 +45,20 @@ fn main() {
         } else {
             window.update();
             let mouse = window.get_mouse_pos(minifb::MouseMode::Discard);
-            match mouse {
-                Some(m) => {
-                    if window.get_mouse_down(minifb::MouseButton::Left) {
-                        let x = ((m.0 as f64 - (WIDTH as f64 / 2.0)) * delta_x) + offset.0;
-                        let y = ((-m.1 as f64 + (HEIGHT as f64 / 2.0)) * delta_y) + offset.1;
-                        x_bounds = (
-                            (x as f64 - (scale.0 / 2.0)) + (ZOOM_FACTOR * scale.0),
-                            (x as f64 + (scale.0 / 2.0)) - (ZOOM_FACTOR * scale.0),
-                        );
-                        y_bounds = (
-                            (y as f64 - (scale.1 / 2.0)) + (ZOOM_FACTOR * scale.1),
-                            (y as f64 + (scale.1 / 2.0)) - (ZOOM_FACTOR * scale.1),
-                        );
-                        scale = (x_bounds.1 - x_bounds.0, y_bounds.1 - y_bounds.0);
-                        delta_x = scale.0 / WIDTH as f64;
-                        delta_y = scale.1 / HEIGHT as f64;
-                        offset = (
-                            (x_bounds.0 + x_bounds.1) / 2.0,
-                            (y_bounds.0 + y_bounds.1) / 2.0,
-                        );
-                        println!("zooming {:?} {:?}", x_bounds, y_bounds);
-                        buffer_needs_update = true;
-                    }
+            if let Some(m) = mouse {
+                if window.get_mouse_down(minifb::MouseButton::Left) {
+                    let m = Vec2::new(m.0, -m.1);
+                    let coords =
+                        ((m + ((resolution / 2) * IVec2::new(-1, 1)).as_vec2()) * delta) + offset;
+                    println!("{coords}");
+                    bounds_lower = coords - (scale / 2.0) + (scale * ZOOM_FACTOR);
+                    bounds_upper = coords + (scale / 2.0) - (scale * ZOOM_FACTOR);
+                    scale = bounds_upper - bounds_lower;
+                    delta = scale / resolution.as_vec2();
+                    offset = bounds_lower + bounds_upper / 2.0;
+                    buffer_needs_update = true;
+                    println!("drawing {} {}", bounds_lower, bounds_upper);
                 }
-                None => {}
             }
         }
     }
