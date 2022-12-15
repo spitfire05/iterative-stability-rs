@@ -3,7 +3,7 @@ use iterative_stability::mandelbrot;
 use minifb::{Key, Window, WindowOptions};
 use palette::{Hsv, Hue, Srgb};
 use rayon::prelude::*;
-use std::time::Instant;
+use std::{ops::Mul, time::Instant};
 
 const WIDTH: usize = 1200;
 const HEIGHT: usize = 1200;
@@ -21,11 +21,15 @@ fn main() {
     let mut buffer_needs_update = true;
     let mut bounds_lower = Vec2::new(-2.5, -2.0);
     let mut bounds_upper = Vec2::new(1.5, 2.0);
-    let mut scale = bounds_upper - bounds_lower;
+    let mut scale = calc_scale(bounds_lower, bounds_upper);
     let resolution = IVec2::new(WIDTH as i32, HEIGHT as i32);
     let mut delta = scale / resolution.as_vec2();
-    let mut offset = bounds_lower + bounds_upper / 2.0;
+    let mut offset = calc_offset(bounds_lower, bounds_upper);
+    //let translation =
     println!("drawing {:?} {:?}", bounds_lower, bounds_upper);
+    window
+        .update_with_buffer(vec![0u32; WIDTH * HEIGHT].as_slice(), WIDTH, HEIGHT)
+        .unwrap();
     while window.is_open() && !window.is_key_down(Key::Escape) {
         if buffer_needs_update {
             let start = Instant::now();
@@ -50,18 +54,25 @@ fn main() {
                     let m = Vec2::new(m.0, -m.1);
                     let coords =
                         ((m + ((resolution / 2) * IVec2::new(-1, 1)).as_vec2()) * delta) + offset;
-                    println!("{coords}");
                     bounds_lower = coords - (scale / 2.0) + (scale * ZOOM_FACTOR);
                     bounds_upper = coords + (scale / 2.0) - (scale * ZOOM_FACTOR);
-                    scale = bounds_upper - bounds_lower;
+                    scale = calc_scale(bounds_lower, bounds_upper);
                     delta = scale / resolution.as_vec2();
-                    offset = bounds_lower + bounds_upper / 2.0;
+                    offset = calc_offset(bounds_lower, bounds_upper);
                     buffer_needs_update = true;
                     println!("drawing {} {}", bounds_lower, bounds_upper);
                 }
             }
         }
     }
+}
+
+fn calc_scale(bounds_lower: Vec2, bounds_upper: Vec2) -> Vec2 {
+    bounds_upper - bounds_lower
+}
+
+fn calc_offset(bounds_lower: Vec2, bounds_upper: Vec2) -> Vec2 {
+    (bounds_lower + bounds_upper) / 2.0
 }
 
 pub fn apply_palette(iter: u64, stable: bool) -> u32 {

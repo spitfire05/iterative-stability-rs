@@ -1,6 +1,6 @@
 [workspace]
 members = ["wasm-julia"]
-exclude = ["iterative-stability"]
+# exclude = ["iterative-stability"]
 
 [profile.release.package.wasm-julia]
 # Tell `rustc` to optimize for small code size.

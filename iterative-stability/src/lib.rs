@@ -150,7 +150,11 @@ where
 
     is_stable(
         |c: Complex<F>| {
-            c.powu(2) + Complex::<F>::new(F::from(cart.x).unwrap(), F::from(cart.y).unwrap())
+            c.powu(2)
+                + Complex::<F>::new(
+                    NumCast::from(cart.x).unwrap(),
+                    NumCast::from(cart.y).unwrap(),
+                )
         },
         Complex::<F>::new(F::zero(), F::zero()),
         |f| f.re < F::infinity() && f.im < F::infinity(),
