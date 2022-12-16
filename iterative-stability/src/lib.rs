@@ -1,6 +1,9 @@
+mod wgpu;
+
 use glam::{IVec2, Vec2};
 use num_complex::Complex;
 use num_traits::{Float, NumCast};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 pub fn is_stable<F, G, U>(
     function: F,
@@ -54,24 +57,27 @@ pub mod mandelbrot {
 
 #[cfg(feature = "parallel")]
 pub mod mandelbrot {
-    use crate::{from_screen_pixel_mandelbrot, SpaceParams};
+    use crate::SpaceParams;
     use glam::{IVec2, Vec2};
     use num_traits::Float;
     use rayon::prelude::*;
 
-    pub fn calc_screen_space<F>(
-        lower: Vec2,
-        upper: Vec2,
-        resolution: IVec2,
-    ) -> impl ParallelIterator<Item = (u64, bool)>
+    pub fn calc_screen_space<F>(lower: Vec2, upper: Vec2, resolution: IVec2) -> Vec<(u64, bool)>
     where
         F: Float + Send + Sync,
     {
         let sp = SpaceParams::new(lower, upper, resolution);
 
-        (0i32..(resolution.x * resolution.y))
-            .into_par_iter()
-            .map(move |index| from_screen_pixel_mandelbrot::<F>(index, resolution, sp))
+        // (0i32..(resolution.x * resolution.y))
+        //     .into_par_iter()
+        //     .map(move |index| from_screen_pixel_mandelbrot::<F>(index, resolution, sp))
+        //     .collect()
+
+        crate::wgpu_from_screen_pixels_mandelbrot(
+            (0i32..(resolution.x * resolution.y)).into_par_iter(),
+            resolution,
+            sp,
+        )
     }
 }
 
@@ -140,6 +146,30 @@ impl SpaceParams {
             delta,
         }
     }
+}
+
+fn wgpu_from_screen_pixels_mandelbrot(
+    index: impl ParallelIterator<Item = i32>,
+    resolution: IVec2,
+    sp: SpaceParams,
+) -> Vec<(u64, bool)> {
+    let cart: Vec<_> = index
+        .map(|i| from_screen_point_to_cartesian(i, resolution, sp))
+        .collect();
+
+    let results = cart
+        .chunks(65535)
+        .flat_map(|c| pollster::block_on(wgpu::execute_gpu(c)).unwrap());
+
+    results
+        .map(|i| {
+            if i == 1000 {
+                return (i as u64, true);
+            }
+
+            (i as u64, false)
+        })
+        .collect()
 }
 
 fn from_screen_pixel_mandelbrot<F>(index: i32, resolution: IVec2, sp: SpaceParams) -> (u64, bool)

@@ -35,7 +35,8 @@ fn main() {
             let start = Instant::now();
             let buffer: Vec<u32> =
                 mandelbrot::calc_screen_space::<f32>(bounds_lower, bounds_upper, resolution)
-                    .map(|(iter, stable)| apply_palette(iter, stable))
+                    .iter()
+                    .map(|(iter, stable)| apply_palette(*iter, *stable))
                     .collect();
 
             println!(
