@@ -27,6 +27,7 @@ pub async fn execute_gpu(numbers: &[Vec2]) -> Option<Vec<u32>> {
         .unwrap();
 
     let info = adapter.get_info();
+    println!("{}", info.name);
     // skip this on LavaPipe temporarily
     if info.vendor == 0x10005 {
         return None;
