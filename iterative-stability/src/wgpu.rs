@@ -9,7 +9,10 @@ pub async fn execute_gpu(numbers: &[Vec2]) -> Option<Vec<u32>> {
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions::default())
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            ..Default::default()
+        })
         .await?;
 
     // `request_device` instantiates the feature specific connection to the GPU, defining some parameters,
