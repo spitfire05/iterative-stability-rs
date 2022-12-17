@@ -36,14 +36,21 @@ pub async fn execute_gpu(numbers: &[Vec2]) -> Option<Vec<u32>> {
         return None;
     }
 
-    execute_gpu_inner(&device, &queue, numbers).await
+    let chunks = numbers.chunks(65535);
+    let mut result = Vec::<u32>::with_capacity(numbers.len());
+    for c in chunks {
+        let mut r = execute_gpu_inner(&device, &queue, c).await;
+        result.append(&mut r);
+    }
+
+    Some(result)
 }
 
 async fn execute_gpu_inner(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     numbers: &[Vec2],
-) -> Option<Vec<u32>> {
+) -> Vec<u32> {
     // Loads the shader from WGSL
     let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
@@ -220,7 +227,7 @@ async fn execute_gpu_inner(
                                        // It effectively frees the memory
 
         // Returns data from buffer
-        Some(result)
+        result
     } else {
         panic!("failed to run compute on gpu!")
     }

@@ -157,17 +157,16 @@ fn wgpu_from_screen_pixels_mandelbrot(
         .map(|i| from_screen_point_to_cartesian(i, resolution, sp))
         .collect();
 
-    let results = cart
-        .chunks(65535)
-        .flat_map(|c| pollster::block_on(wgpu::execute_gpu(c)).unwrap());
+    let results = pollster::block_on(wgpu::execute_gpu(&cart)).unwrap();
 
     results
+        .iter()
         .map(|i| {
-            if i == 1000 {
-                return (i as u64, true);
+            if *i == 1000 {
+                return (*i as u64, true);
             }
 
-            (i as u64, false)
+            (*i as u64, false)
         })
         .collect()
 }
