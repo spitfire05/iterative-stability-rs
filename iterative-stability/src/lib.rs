@@ -57,7 +57,7 @@ pub mod mandelbrot {
 
 #[cfg(feature = "parallel")]
 pub mod mandelbrot {
-    use crate::SpaceParams;
+    use crate::{from_screen_pixel_mandelbrot, SpaceParams};
     use glam::{IVec2, Vec2};
     use num_traits::Float;
     use rayon::prelude::*;
@@ -162,7 +162,7 @@ fn wgpu_from_screen_pixels_mandelbrot(
     results
         .iter()
         .map(|i| {
-            if *i == 1000 {
+            if *i == 500 {
                 return (*i as u64, true);
             }
 

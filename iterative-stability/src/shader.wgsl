@@ -39,20 +39,14 @@ fn mandelbrot(c: vec2<f32>) -> u32 {
     var z: vec2<f32> = vec2(0.0, 0.0);
     var i: u32 = 0u;
     loop {
-        if i >= 1000u {
+        if i >= 500u {
             break;
         }
-        if z.x > 1000000.0 || z.y > 1000000.0 {
+        if z.x > 1e+20f || z.y > 1e+20f {
             break;
         }
 
-        if z.x == 0.0 {
-            z = vec2(- pow(z.y, 2.0), 0.0) + c;
-        }
-        else {
-            var fi = atan(z.y / z.x);
-            z = (pow(length(z), 2.0) * vec2(cos(2.0 * fi), sin(2.0 * fi))) + c;
-        }
+        z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
 
         i++;
     }
